@@ -1,0 +1,7 @@
+livekit
+livekit-agents[silero,turn-detector]~=1.3
+livekit-plugins-noise-cancellation~=0.2
+livekit-plugins-silero
+livekit-plugins-deepgram
+livekit-plugins-turn-detector
+python-dotenv
