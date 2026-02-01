@@ -23,6 +23,7 @@ server = AgentServer()
 
 @server.rtc_session()
 async def my_agent(ctx: agents.JobContext):
+    print("[Agent] Job received, waiting for room connection...")
     session = AgentSession(
         stt="deepgram/nova-3:en",
         llm="openai/gpt-4.1-mini",
@@ -47,10 +48,12 @@ async def my_agent(ctx: agents.JobContext):
             ),
         ),
     )
+    print(f"[Agent] Session started in room: {ctx.room.name}")
 
     await session.generate_reply(
         instructions="Greet the user and offer your assistance."
     )
+    print("[Agent] Initial greeting sent.")
 
 
 if __name__ == "__main__":
