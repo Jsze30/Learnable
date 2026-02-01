@@ -11,3 +11,6 @@ ffmpeg -y \
   -i assets/sounds/narration.wav \
   -c:v copy -c:a aac -shortest \
   out_with_audio.mp4
+
+
+curl -X POST http://localhost:3000/generate -F "user_prompt=Explain backtracking algorithms visually" -F "source_pdf=@backend/source_example/02-backtracking.pdf" "model=azure/gpt-5" "max_videos=1"

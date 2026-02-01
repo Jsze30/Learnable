@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, CaretDoubleLeft, CaretDoubleRight, Microphone } from '@phosphor-icons/react'
+import { ArrowLeft, ArrowRight, ArrowUp, CaretDoubleLeft, CaretDoubleRight, Microphone } from '@phosphor-icons/react'
 import { Room, RoomEvent, createLocalAudioTrack } from 'livekit-client'
 
 const PANEL_MIN = 320
@@ -21,11 +21,14 @@ function SessionPage({
   onChatMessagesChange,
   onBack,
   autoStartMic = false,
+  showVideos = false,
+  isGenerating = false,
 }) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [panelWidth, setPanelWidth] = useState(420)
   const [isResizing, setIsResizing] = useState(false)
   const [chatInput, setChatInput] = useState('')
+  const [currentVideo, setCurrentVideo] = useState(1)
   const [micStatus, setMicStatus] = useState('idle')
   const [micError, setMicError] = useState('')
   const roomRef = useRef(null)
@@ -289,13 +292,34 @@ function SessionPage({
                 </div>
               )}
             </div>
-            <div className="flex flex-1 items-center justify-center px-6 py-10">
-              <div className="flex h-full w-full flex-col items-center justify-center rounded-3xl border border-white/10 bg-white/5">
-                <div className="text-sm uppercase tracking-[0.3em] text-white/50">
-                  Video/AI Response
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-white/80">
-                  Rendering Output
+            <div className="flex flex-1 px-6 py-4">
+              <div className="flex h-full w-full flex-col items-center rounded-3xl border border-white/10 bg-white/5 p-4">
+                <video
+                  key={currentVideo}
+                  src={`/videos/Video${currentVideo}.mp4`}
+                  controls
+                  autoPlay
+                  className="w-full flex-1 rounded-2xl object-contain"
+                />
+                <div className="mt-2 flex items-center gap-4">
+                  {currentVideo > 1 && (
+                    <button
+                      onClick={() => setCurrentVideo(currentVideo - 1)}
+                      className="flex items-center gap-2 rounded-full bg-white/10 px-6 py-2 text-white font-medium hover:bg-white/20 transition"
+                    >
+                      <ArrowLeft size={20} weight="bold" />
+                      Previous video lesson
+                    </button>
+                  )}
+                  {currentVideo < 2 && (
+                    <button
+                      onClick={() => setCurrentVideo(currentVideo + 1)}
+                      className="flex items-center gap-2 rounded-full bg-white/10 px-6 py-2 text-white font-medium hover:bg-white/20 transition"
+                    >
+                      Next video lesson
+                      <ArrowRight size={20} weight="bold" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
