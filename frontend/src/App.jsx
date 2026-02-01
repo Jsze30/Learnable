@@ -24,6 +24,7 @@ const mergeSources = (existing, files) => {
     id: `${file.name}-${file.size}-${file.lastModified}`,
     name: file.name,
     size: file.size,
+    file: file, // Store actual File object for API calls
   }))
   const known = new Set(existing.map((item) => item.id))
   return [...existing, ...incoming.filter((item) => !known.has(item.id))]
@@ -42,6 +43,8 @@ function App() {
   const fileInputRef = useRef(null)
   const transitionTimeoutRef = useRef(null)
   const [landingKey, setLandingKey] = useState(0)
+  const [showVideos, setShowVideos] = useState(true)  // TODO: change back to false
+  const [isGenerating, setIsGenerating] = useState(false)
 
   useEffect(() => {
     if (!subjects.length) {
@@ -136,12 +139,13 @@ function App() {
     e.target.value = ''
   }
 
-  const handleSendChat = () => {
+  const handleSendChat = async () => {
     const prompt = chatInput.trim()
     if (!prompt) return
     const targetSubjectId = ensureSubjectForSession()
     setAutoStartMic(false)
     setChatInput('')
+
     updateSubjectById(targetSubjectId, (subject) => ({
       ...subject,
       chatMessages: [
@@ -150,6 +154,36 @@ function App() {
       ],
     }))
     triggerSessionTransition()
+
+    // Make the API call
+    setIsGenerating(true)
+    setShowVideos(false)
+    try {
+      console.log({"prompt": prompt})
+      const formData = new FormData()
+      formData.append('user_prompt', prompt)
+      formData.append('model', 'azure/gpt-5')
+      formData.append('max_videos', '1')
+
+      const response = await fetch('http://localhost:3000/generate', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log('Generate API response:', data)
+
+      // Show the hardcoded videos
+      setShowVideos(true)
+    } catch (error) {
+      console.error('Failed to call generate API:', error)
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const handleAddSubject = () => {
@@ -392,10 +426,15 @@ function App() {
                   setAutoStartMic(false)
                 }}
                 autoStartMic={autoStartMic}
+                showVideos={showVideos}
+                isGenerating={isGenerating}
               />
+
+
             </div>
           )}
         </div>
+
       </div>
     </div>
   )

@@ -1,8 +1,14 @@
 """
 ai_gen_audio.py
 
-Generate narration audio for Video 1 of the Backtracking Algorithms micro‑series
-using Deepgram TTS. Run once before rendering the Manim video.
+Boilerplate script for generating narration audio using Deepgram TTS.
+Designed to be run ONCE before rendering Manim videos.
+
+Pipeline:
+1. Define narration segments (text + filename)
+2. Generate WAV files via Deepgram
+3. Concatenate segments into a single narration.wav
+4. Print durations for timing / debugging
 
 Requirements:
 - export DEEPGRAM_API_KEY="your_key"
@@ -111,40 +117,32 @@ def tts_to_wav(
 # ----------------------------
 def narration_segments() -> List[Tuple[str, str]]:
     """
-    Return a list of (text, filename) pairs for Video 1.
+    Return a list of (text, filename) pairs.
+
+    Edit this function for each video.
     Filenames should end with .wav.
     """
     return [
         (
-            "Welcome to the first video in our backtracking series. "
-            "Today we’ll explore the core idea behind backtracking: "
-            "systematically trying every possibility, but stepping back "
-            "as soon as we hit a dead end.",
-            "intro.wav",
+            "Welcome! In this video we'll explore the idea of backtracking, "
+            "a systematic way of trying every possibility until we find a solution.",
+            "seg1.wav",
         ),
         (
-            "Think of a decision tree. Each node represents a partial solution, "
-            "and each branch represents a choice. "
-            "Backtracking walks this tree depth‑first, building a solution piece by piece.",
-            "tree_intro.wav",
+            "Think of a decision tree where each node represents a partial solution. "
+            "We explore one branch depth‑first, building choices step by step.",
+            "seg2.wav",
         ),
         (
-            "When a choice leads to an invalid state, we backtrack: "
-            "return to the previous node and explore the next branch. "
-            "This guarantees an exhaustive search of the solution space.",
-            "backtrack_explain.wav",
+            "Imagine a tiny recursion fairy walking down a branching maze, "
+            "leaving a breadcrumb for the current partial solution. "
+            "When she hits a dead end, she lifts the breadcrumb and tries the next corridor.",
+            "seg3.wav",
         ),
         (
-            "A useful mental model is a maze explorer with a rope. "
-            "You walk forward, laying rope behind you. "
-            "If you hit a wall, you pull the rope back to the last fork and try a different path.",
-            "rope_metaphor.wav",
-        ),
-        (
-            "That’s the essence of backtracking: depth‑first traversal, "
-            "recording decisions, and retreating when necessary. "
-            "In the next videos we’ll see this pattern in action and learn how to make it efficient.",
-            "outro.wav",
+            "Because we eventually visit every branch, backtracking guarantees that if a solution "
+            "exists in a finite tree, we'll find it – or we can stop at the first one.",
+            "seg4.wav",
         ),
     ]
 

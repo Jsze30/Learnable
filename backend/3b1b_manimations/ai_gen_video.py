@@ -9,8 +9,9 @@ from manimlib import (
     Scene, VGroup, Text, Dot, Line, Rectangle, Circle,
     FadeIn, FadeOut, Write, ShowCreation, GrowFromCenter,
     Transform, ReplacementTransform, Indicate, SurroundingRectangle,
-    YELLOW, GREEN, RED, GREY_B, WHITE, ORANGE, BLUE,
-    ORIGIN, UP, DOWN, LEFT, RIGHT
+    ApplyMethod,
+    YELLOW, GREEN, RED, GREY_B, WHITE, ORIGIN,
+    UP, DOWN, LEFT, RIGHT
 )
 
 # ----------------------------
@@ -21,7 +22,7 @@ def wav_duration_seconds(path: Path) -> float:
         return wf.getnframes() / float(wf.getframerate())
 
 def safe_wait(scene: Scene, seconds: float, cap: float = 120.0):
-    """Never let bad durations cause a forever‑wait."""
+    """Never let bad durations cause a forever-wait."""
     scene.wait(max(0.0, min(seconds, cap)))
 
 
@@ -39,7 +40,7 @@ def callout_box(mob, *, color=YELLOW, buff=0.25):
     return SurroundingRectangle(mob, color=color, buff=buff)
 
 def make_node(label: str, color=WHITE):
-    dot = Dot(radius=0.07, color=color)
+    dot = Dot(radius=0.06, color=color)
     txt = Text(label, font_size=22, color=color).next_to(dot, RIGHT, buff=0.12)
     return VGroup(dot, txt)
 
@@ -66,17 +67,13 @@ class NarratedTimelineScene(Scene):
         return self.NARRATION_PATH
 
     def build_timeline(self) -> List[Beat]:
-        """
-        Override in child classes.
-        Return a list of (t, action) beats.
-        """
         return []
 
     def construct(self):
         narration = self.get_narration_path()
         if not narration.exists():
             raise RuntimeError(
-                f"Missing {narration}. Run ai_gen_audio.py first."
+                f"Missing {narration}. Run your gen_audio.py first."
             )
 
         dur = wav_duration_seconds(narration)
@@ -94,144 +91,158 @@ class NarratedTimelineScene(Scene):
 
 
 # ----------------------------
-# Video 1 – What is Backtracking?
+# Video 1 – “What Is Backtracking? The “Try‑Everything” Mindset”
 # ----------------------------
 class Video1(NarratedTimelineScene):
-    """
-    Implements the first micro‑lecture: “What is Backtracking? The Explorer’s Mindset”.
-    """
-
     def build_timeline(self) -> List[Beat]:
-        # -----------------------
-        # Static content
-        # -----------------------
-        title = title_card(
-            "What is Backtracking?",
-            "The Explorer’s Mindset"
+        # -------------------------------------------------
+        # Determine timestamps from individual segment files
+        # -------------------------------------------------
+        seg_files = ["intro.wav", "contrast.wav", "maze.wav", "dfs.wav"]
+        seg_paths = [Path("assets/sounds") / f for f in seg_files]
+        seg_durs = [wav_duration_seconds(p) for p in seg_paths]
+
+        # cumulative start times
+        starts = [0.0]
+        for d in seg_durs[:-1]:
+            starts.append(starts[-1] + d)
+
+        # -------------------------------------------------
+        # Pre‑build visual objects (shared across beats)
+        # -------------------------------------------------
+        # Title
+        header = title_card(
+            "What Is Backtracking?",
+            "The “Try‑Everything” Mindset"
         ).to_edge(UP, buff=0.6)
 
-        # Decision‑tree area (center)
-        tree_center = ORIGIN + UP * 0.3
-        root = make_node("root").move_to(tree_center + UP * 1.2)
+        # Definition segment (intro)
+        def_text = Text(
+            "Backtracking is a systematic brute‑force search.\n"
+            "We build a solution piece‑by‑piece, and whenever a partial\n"
+            "choice violates a constraint we step back and try a different option.",
+            font_size=28,
+            color=WHITE,
+            line_spacing=0.8
+        ).to_edge(LEFT, buff=0.8).shift(DOWN * 0.2)
 
-        # Pre‑create a small binary tree (depth 3) – we will reveal it gradually
-        lvl1_left = make_node("L").move_to(tree_center + LEFT * 2 + UP * 0.3)
-        lvl1_right = make_node("R").move_to(tree_center + RIGHT * 2 + UP * 0.3)
+        # Simple diagram for definition
+        d_center = LEFT * 3 + DOWN * 1
+        part_a = Dot(d_center + LEFT * 1.5, color=GREEN)
+        part_b = Dot(d_center + RIGHT * 1.5, color=GREEN)
+        part_arrow = Line(part_a.get_center(), part_b.get_center(), color=GREY_B, stroke_width=3)
+        backtrack_arrow = Line(part_b.get_center(), part_a.get_center(), color=RED, stroke_width=3, dash_length=0.1)
 
-        lvl2_ll = make_node("LL").move_to(tree_center + LEFT * 3 + DOWN * 0.8)
-        lvl2_lr = make_node("LR").move_to(tree_center + LEFT * 1 + DOWN * 0.8)
-        lvl2_rl = make_node("RL").move_to(tree_center + RIGHT * 1 + DOWN * 0.8)
-        lvl2_rr = make_node("RR").move_to(tree_center + RIGHT * 3 + DOWN * 0.8)
+        # Contrast segment
+        # Greedy path (straight line)
+        greedy_line = Line(LEFT * 4 + UP * 1, LEFT * 2 + UP * 1, color=YELLOW, stroke_width=4)
+        greedy_label = Text("Greedy / Heuristic", font_size=24, color=YELLOW).next_to(greedy_line, UP)
 
-        # Edges (invisible at first)
-        edges = [
-            connect_nodes(root, lvl1_left),
-            connect_nodes(root, lvl1_right),
-            connect_nodes(lvl1_left, lvl2_ll),
-            connect_nodes(lvl1_left, lvl2_lr),
-            connect_nodes(lvl1_right, lvl2_rl),
-            connect_nodes(lvl1_right, lvl2_rr),
-        ]
+        # Exhaustive tree (binary tree)
+        tree_root = make_node("root").move_to(RIGHT * 2 + UP * 1.5)
+        left_child = make_node("L").move_to(RIGHT * 1 + UP * 0.5)
+        right_child = make_node("R").move_to(RIGHT * 3 + UP * 0.5)
+        edge_l = connect_nodes(tree_root, left_child)
+        edge_r = connect_nodes(tree_root, right_child)
+        tree_group = VGroup(tree_root, left_child, right_child, edge_l, edge_r)
+        tree_label = Text("Exhaustive Search", font_size=24, color=GREY_B).next_to(tree_group, UP)
 
-        # Rope‑metaphor illustration (bottom)
-        rope_box = Rectangle(width=6, height=2.5, stroke_width=2, stroke_color=GREY_B)
-        rope_box.to_edge(DOWN, buff=0.8)
-        rope_label = simple_box_label(rope_box, "Maze Explorer with Rope")
+        # Maze segment
+        # Build a tiny 3x3 grid (9 squares)
+        squares = VGroup(*[
+            Rectangle(width=0.8, height=0.8, stroke_width=2, stroke_color=GREY_B)
+            .move_to(LEFT * 2 + DOWN * 2 + 0.9 * (i % 3) * RIGHT + 0.9 * (i // 3) * UP)
+            for i in range(9)
+        ])
+        explorer = Dot(radius=0.12, color=YELLOW).move_to(squares[0].get_center())
+        maze_label = Text("Maze Explorer", font_size=24, color=WHITE).to_edge(UP, buff=0.8)
 
-        explorer = Circle(radius=0.25, color=ORANGE).move_to(rope_box.get_left() + RIGHT * 0.5 + DOWN * 0.3)
-        rope = Line(explorer.get_center(), rope_box.get_left() + RIGHT * 0.2, color=YELLOW, stroke_width=4)
+        # DFS recursion tree segment
+        # Binary tree depth 3
+        nodes = []
+        edges = []
+        for depth in range(3):
+            for i in range(2 ** depth):
+                label = f"N{depth}_{i}"
+                node = make_node(label).move_to(LEFT * 3 + RIGHT * (i * 1.5) + UP * (2 - depth) * 1.2)
+                nodes.append(node)
+                if depth > 0:
+                    parent_idx = (i // 2) + sum(2 ** d for d in range(depth - 1))
+                    edge = connect_nodes(nodes[parent_idx], node)
+                    edges.append(edge)
+        tree = VGroup(*nodes, *edges)
+        dfs_label = Text("Depth‑First Traversal", font_size=24, color=WHITE).to_edge(UP, buff=0.8)
 
-        # Outro card
-        outro = VGroup(
-            Text("Key Takeaway:", font_size=30, color=GREY_B),
-            Text(
-                "Backtracking = depth‑first search + retreat on dead‑ends",
-                font_size=34,
-                color=WHITE,
-            ),
+        # End card
+        end_card = VGroup(
+            Text("Take‑away:", font_size=30, color=GREY_B),
+            Text("Backtracking = try everything, prune when impossible.", font_size=34, color=WHITE),
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.2).move_to(ORIGIN)
+        end_box = SurroundingRectangle(end_card, color=GREY_B, buff=0.35)
 
-        # -----------------------
-        # Helper actions
-        # -----------------------
+        # -------------------------------------------------
+        # Action helpers
+        # -------------------------------------------------
         def show_title():
-            self.play(Write(title), run_time=1.0)
+            self.play(Write(header), run_time=1.0)
 
-        def grow_tree():
-            # reveal root and first level
-            self.play(GrowFromCenter(root), run_time=0.6)
-            self.play(ShowCreation(edges[0]), ShowCreation(edges[1]), run_time=0.8)
-            self.play(GrowFromCenter(lvl1_left), GrowFromCenter(lvl1_right), run_time=0.8)
+        def show_definition():
+            self.play(FadeIn(def_text), run_time=1.2)
+            self.play(FadeIn(part_a), FadeIn(part_b), ShowCreation(part_arrow), run_time=0.8)
+            self.play(Indicate(backtrack_arrow, color=RED), run_time=0.6)
 
-        def expand_tree():
-            # reveal second level
-            self.play(
-                ShowCreation(edges[2]), ShowCreation(edges[3]),
-                ShowCreation(edges[4]), ShowCreation(edges[5]),
-                run_time=1.0,
-            )
-            self.play(
-                GrowFromCenter(lvl2_ll), GrowFromCenter(lvl2_lr),
-                GrowFromCenter(lvl2_rl), GrowFromCenter(lvl2_rr),
-                run_time=1.0,
-            )
+        def show_contrast():
+            self.play(FadeIn(greedy_line), FadeIn(greedy_label), run_time=0.8)
+            self.play(FadeIn(tree_group), FadeIn(tree_label), run_time=0.9)
 
-        def traverse_highlight():
-            # depth‑first visit order: root → L → LL → backtrack → LR → backtrack → backtrack → R → RL → backtrack → RR
-            order = [root, lvl1_left, lvl2_ll, lvl2_lr, lvl1_right, lvl2_rl, lvl2_rr]
-            for node in order:
-                self.play(Indicate(node, color=GREEN, scale_factor=1.2), run_time=0.6)
-
-        def backtrack_demo():
-            # show a backtrack from a dead leaf (LL) back to its parent (L)
-            highlight = callout_box(lvl2_ll, color=RED)
-            self.play(ShowCreation(highlight), run_time=0.4)
-            self.play(FadeOut(highlight), run_time=0.3)
-
-        def show_rope_metaphor():
-            self.play(FadeIn(rope_box), FadeIn(rope_label), FadeIn(explorer), FadeIn(rope), run_time=0.9)
-            # simulate moving forward
+        def show_maze():
+            self.play(FadeIn(squares), FadeIn(maze_label), run_time=0.9)
+            self.play(FadeIn(explorer), run_time=0.5)
+            # simple path: forward 2 steps, backtrack, forward another
             path = [
-                explorer.get_center() + RIGHT * 1.5,
-                explorer.get_center() + RIGHT * 3.0,
-                explorer.get_center() + RIGHT * 4.5,
+                squares[0].get_center(),
+                squares[1].get_center(),
+                squares[2].get_center(),
+                squares[5].get_center(),
+                squares[4].get_center(),
+                squares[3].get_center(),
+                squares[6].get_center(),
             ]
             for pt in path:
-                self.play(
-                    explorer.animate.move_to(pt),
-                    rope.animate.put_start_and_end_on(
-                        explorer.get_center(),
-                        rope_box.get_left() + RIGHT * 0.2
-                    ),
-                    run_time=0.7,
-                )
-            # simulate hitting wall and pulling back
+                self.play(ApplyMethod(explorer.move_to, pt), run_time=0.4)
+            self.play(Indicate(explorer, color=RED), run_time=0.5)
+
+        def show_dfs():
+            self.play(FadeIn(tree), FadeIn(dfs_label), run_time=1.0)
+            # simulate depth‑first traversal with a highlight dot
+            highlight = Dot(radius=0.09, color=YELLOW).move_to(nodes[0][0].get_center())
+            self.play(FadeIn(highlight), run_time=0.5)
+            order = [0, 1, 3, 4, 2, 5, 6]  # pre‑order indices of nodes list
+            for idx in order:
+                target = nodes[idx][0].get_center()
+                self.play(ApplyMethod(highlight.move_to, target), run_time=0.4)
+            self.play(FadeOut(highlight), run_time=0.4)
+
+        def wrap_up():
             self.play(
-                explorer.animate.move_to(rope_box.get_left() + RIGHT * 0.5),
-                rope.animate.put_start_and_end_on(
-                    explorer.get_center(),
-                    rope_box.get_left() + RIGHT * 0.2
-                ),
-                run_time=0.9,
+                FadeOut(VGroup(header, def_text, part_a, part_b, part_arrow, backtrack_arrow,
+                               greedy_line, greedy_label, tree_group, tree_label,
+                               squares, explorer, maze_label,
+                               tree, dfs_label)),
+                run_time=0.8
             )
-            self.play(FadeOut(VGroup(rope_box, rope_label, explorer, rope)), run_time=0.6)
+            self.play(FadeIn(end_box), FadeIn(end_card), run_time=1.0)
 
-        def show_outro():
-            box = callout_box(outro, color=YELLOW)
-            self.play(FadeIn(outro), run_time=0.8)
-            self.play(ShowCreation(box), run_time=0.4)
-            self.play(FadeOut(box), run_time=0.3)
-
-        # -----------------------
-        # Beats – timestamps (seconds from start of narration)
-        # Adjust these numbers after listening to the generated narration.wav
-        # -----------------------
-        return [
-            (0.0, show_title),                 # intro title
-            (2.0, grow_tree),                  # "decision tree" intro
-            (6.0, expand_tree),                # continue tree growth
-            (10.0, traverse_highlight),        # depth‑first traversal
-            (15.0, backtrack_demo),            # dead‑end backtrack
-            (18.0, show_rope_metaphor),        # rope metaphor
-            (24.0, show_outro),                # outro / key pattern
+        # -------------------------------------------------
+        # Beats (using computed start times)
+        # -------------------------------------------------
+        beats: List[Beat] = [
+            (starts[0] + 0.0, show_title),
+            (starts[0] + 0.5, show_definition),
+            (starts[1] + 0.2, show_contrast),
+            (starts[2] + 0.2, show_maze),
+            (starts[3] + 0.2, show_dfs),
+            (starts[3] + seg_durs[3] - 2.0, wrap_up),  # start wrap‑up ~2 s before audio ends
         ]
+
+        return beats
