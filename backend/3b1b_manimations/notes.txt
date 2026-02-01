@@ -1,0 +1,13 @@
+generate gen_audio.py and backtracking_video1.py
+
+
+export DEEPGRAM_API_KEY="your_key"
+python gen_audio.py
+manimgl backtracking_video1.py BacktrackingCorePattern -w
+
+not required (i think):
+ffmpeg -y \
+  -i videos/BacktrackingCorePattern.mp4 \
+  -i assets/sounds/narration.wav \
+  -c:v copy -c:a aac -shortest \
+  out_with_audio.mp4
