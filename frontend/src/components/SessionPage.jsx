@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, ArrowUp, Microphone } from '@phosphor-icons/react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowUp, CaretDoubleLeft, CaretDoubleRight, Microphone } from '@phosphor-icons/react'
 import { Room, RoomEvent, createLocalAudioTrack } from 'livekit-client'
 
 const PANEL_MIN = 320
@@ -13,17 +13,18 @@ function clamp(value, min, max) {
 function SessionPage({
   activeTab,
   onTabChange,
-  sessionPrompt,
   animateIn,
-  uploadedFiles,
+  projectName,
+  sources,
+  onSourcesChange,
+  chatMessages,
+  onChatMessagesChange,
   onBack,
   autoStartMic = false,
 }) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [panelWidth, setPanelWidth] = useState(420)
   const [isResizing, setIsResizing] = useState(false)
-  const [sources, setSources] = useState([])
-  const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
   const [micStatus, setMicStatus] = useState('idle')
   const [micError, setMicError] = useState('')
@@ -31,15 +32,26 @@ function SessionPage({
   const audioTrackRef = useRef(null)
   const remoteAudioRef = useRef(null)
   const autoStartRef = useRef(false)
+  const resizeFrameRef = useRef(null)
+  const pendingResizeRef = useRef(null)
 
   useEffect(() => {
     if (!isResizing) return
     const handleMove = (event) => {
       const clientX = event.clientX ?? 0
-      const viewportWidth = window.innerWidth
-      const nextWidth = clamp(viewportWidth - clientX, PANEL_MIN, PANEL_MAX)
-      setPanelWidth(nextWidth)
-      setIsCollapsed(false)
+      if (resizeFrameRef.current) {
+        pendingResizeRef.current = clientX
+        return
+      }
+      pendingResizeRef.current = clientX
+      resizeFrameRef.current = requestAnimationFrame(() => {
+        const nextClientX = pendingResizeRef.current ?? 0
+        const viewportWidth = window.innerWidth
+        const nextWidth = clamp(viewportWidth - nextClientX, PANEL_MIN, PANEL_MAX)
+        setPanelWidth(nextWidth)
+        setIsCollapsed(false)
+        resizeFrameRef.current = null
+      })
     }
     const stopResize = () => setIsResizing(false)
     window.addEventListener('mousemove', handleMove)
@@ -49,39 +61,6 @@ function SessionPage({
       window.removeEventListener('mouseup', stopResize)
     }
   }, [isResizing])
-
-  const uploadedSourceItems = useMemo(() => {
-    return (uploadedFiles || []).map((file) => ({
-      id: `${file.name}-${file.size}-${file.lastModified}`,
-      name: file.name,
-      size: file.size,
-    }))
-  }, [uploadedFiles])
-
-  useEffect(() => {
-    if (!uploadedSourceItems.length) return
-    setSources((prev) => {
-      const known = new Set(prev.map((item) => item.id))
-      const merged = [...prev]
-      uploadedSourceItems.forEach((item) => {
-        if (!known.has(item.id)) merged.push(item)
-      })
-      return merged
-    })
-  }, [uploadedSourceItems])
-
-  useEffect(() => {
-    if (!sessionPrompt) return
-    setChatMessages((prev) => {
-      if (prev.some((msg) => msg.text === sessionPrompt && msg.role === 'user')) {
-        return prev
-      }
-      return [
-        ...prev,
-        { id: `prompt-${Date.now()}`, role: 'user', text: sessionPrompt },
-      ]
-    })
-  }, [sessionPrompt])
 
   useEffect(() => {
     if (!autoStartMic) {
@@ -102,44 +81,44 @@ function SessionPage({
       if (audioTrackRef.current) {
         audioTrackRef.current.stop()
       }
+      if (resizeFrameRef.current) {
+        cancelAnimationFrame(resizeFrameRef.current)
+        resizeFrameRef.current = null
+      }
     }
   }, [])
+
+  const mergeSources = (existing, files) => {
+    const incoming = files.map((file) => ({
+      id: `${file.name}-${file.size}-${file.lastModified}`,
+      name: file.name,
+      size: file.size,
+    }))
+    const known = new Set(existing.map((item) => item.id))
+    return [...existing, ...incoming.filter((item) => !known.has(item.id))]
+  }
 
   const handleDrop = (event) => {
     event.preventDefault()
     const files = Array.from(event.dataTransfer?.files || [])
     if (!files.length) return
-    setSources((prev) => [
-      ...prev,
-      ...files.map((file) => ({
-        id: `${file.name}-${file.size}-${file.lastModified}`,
-        name: file.name,
-        size: file.size,
-      })),
-    ])
+    onSourcesChange((prev) => mergeSources(prev, files))
   }
 
   const handleFileSelect = (event) => {
     const files = Array.from(event.target.files || [])
     if (!files.length) return
-    setSources((prev) => [
-      ...prev,
-      ...files.map((file) => ({
-        id: `${file.name}-${file.size}-${file.lastModified}`,
-        name: file.name,
-        size: file.size,
-      })),
-    ])
+    onSourcesChange((prev) => mergeSources(prev, files))
   }
 
   const handleRemoveSource = (id) => {
-    setSources((prev) => prev.filter((item) => item.id !== id))
+    onSourcesChange((prev) => prev.filter((item) => item.id !== id))
   }
 
   const handleSendMessage = () => {
     const trimmed = chatInput.trim()
     if (!trimmed) return
-    setChatMessages((prev) => [
+    onChatMessagesChange((prev) => [
       ...prev,
       { id: `${Date.now()}`, role: 'user', text: trimmed },
     ])
@@ -302,10 +281,12 @@ function SessionPage({
                   onClick={onBack}
                   className="text-lg font-semibold text-white/90 hover:text-white"
                 >
-                  LearnIt
+                  {projectName}
                 </button>
               ) : (
-                <div className="text-lg font-semibold text-white/90">LearnIt</div>
+                <div className="text-lg font-semibold text-white/90">
+                  {projectName}
+                </div>
               )}
             </div>
             <div className="flex flex-1 items-center justify-center px-6 py-10">
@@ -321,27 +302,16 @@ function SessionPage({
           </div>
         </section>
 
-        {/* Resize Handle */}
-        <div
-          role="button"
-          tabIndex={0}
-          aria-label="Resize panel"
-          onMouseDown={() => setIsResizing(true)}
-          className="group relative flex w-3 cursor-col-resize items-center justify-center bg-[#0a0a0f]"
-        >
-          <div className="h-20 w-[2px] rounded-full bg-white/10 transition group-hover:bg-white/40" />
-        </div>
-
         {/* Right Panel */}
         <aside
           style={panelStyles}
-          className={`relative flex flex-col overflow-hidden bg-gradient-to-b from-[#f7f6fb] via-[#efeff3] to-[#e7e8ee] text-neutral-900 shadow-[0_24px_60px_rgba(15,23,42,0.25)] transition-[width] duration-200 ${
+          className={`relative flex flex-col overflow-hidden border-l border-white/10 bg-[#2a1426] text-white shadow-[0_24px_60px_rgba(15,23,42,0.35)] transition-[width] duration-200 ${
             animateIn ? 'session-panel-enter' : ''
           }`}
         >
           <button
             onClick={() => setIsCollapsed((prev) => !prev)}
-            className={`absolute z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-neutral-700 shadow-sm transition hover:bg-white ${
+            className={`absolute z-10 flex items-center justify-center rounded-full border border-white/10 bg-white/5 p-2 text-white/70 transition hover:bg-white/10 hover:text-white ${
               isCollapsed
                 ? 'left-1/2 top-3 -translate-x-1/2'
                 : 'left-3 top-3'
@@ -349,16 +319,16 @@ function SessionPage({
             aria-label={isCollapsed ? 'Expand panel' : 'Collapse panel'}
           >
             {isCollapsed ? (
-              <ArrowLeft size={16} weight="bold" />
+              <CaretDoubleLeft size={16} />
             ) : (
-              <ArrowRight size={16} weight="bold" />
+              <CaretDoubleRight size={16} />
             )}
           </button>
           {!isCollapsed && (
-            <div className="flex items-center justify-end border-b border-black/10 px-4 pt-4 pb-2">
+            <div className="flex items-center justify-end px-4 pt-4 pb-2">
               <button
                 onClick={toggleTab}
-                className="rounded-full bg-neutral-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white hover:bg-neutral-800"
+                className="inline-flex h-8 items-center justify-center rounded-full border border-white/10 bg-white/10 px-3 text-xs font-semibold uppercase tracking-wide text-white hover:bg-white/20"
               >
                 {activeTab === 'chat' ? 'Sources' : 'Chat'}
               </button>
@@ -380,12 +350,12 @@ function SessionPage({
                         key={message.id}
                         className={`w-full max-w-[68%] rounded-2xl p-3 text-right text-sm shadow-sm ${
                           message.role === 'user'
-                            ? 'bg-white text-neutral-800'
-                            : 'bg-neutral-900 text-white'
+                            ? 'bg-white/15 text-white'
+                            : 'bg-white text-[#1a1226]'
                         }`}
                       >
                         {message.role !== 'user' && (
-                          <div className="text-[11px] font-semibold uppercase tracking-widest text-neutral-400">
+                          <div className="text-[11px] font-semibold uppercase tracking-widest text-[#1a1226]/60">
                             Lecturer
                           </div>
                         )}
@@ -395,14 +365,14 @@ function SessionPage({
                       </div>
                     ))}
                     {!chatMessages.length && (
-                      <div className="w-full max-w-[68%] rounded-2xl border border-dashed border-neutral-300 bg-neutral-100/70 p-3 text-right text-xs text-neutral-500">
+                      <div className="w-full max-w-[68%] rounded-2xl border border-dashed border-white/20 bg-white/10 p-3 text-right text-xs text-white/60">
                         Start the conversation to guide your lecture.
                       </div>
                     )}
                 </div>
-                <div className="border-t border-black/10 p-4">
+                <div className="border-t border-white/10 p-4">
                   <div
-                    className={`flex items-center gap-2 rounded-full bg-white px-4 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.18)] ${
+                    className={`flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.18)] ${
                       animateIn ? 'session-input-enter' : ''
                     }`}
                   >
@@ -411,8 +381,8 @@ function SessionPage({
                       aria-pressed={micStatus === 'connected'}
                       className={`flex-shrink-0 rounded-full p-2 transition ${
                         micStatus === 'connected'
-                          ? 'bg-neutral-900 text-white'
-                          : 'text-neutral-900 hover:text-black'
+                          ? 'bg-white text-[#1a1226]'
+                          : 'text-white/80 hover:text-white'
                       }`}
                       title={
                         micStatus === 'connected'
@@ -430,17 +400,17 @@ function SessionPage({
                         event.key === 'Enter' && handleSendMessage()
                       }
                       placeholder="Send a message"
-                      className="flex-1 bg-transparent text-sm text-neutral-900 outline-none placeholder:text-neutral-500"
+                      className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/50"
                     />
                     <button
                       onClick={handleSendMessage}
-                      className="flex-shrink-0 rounded-full bg-black p-2 text-white hover:bg-neutral-800"
+                      className="flex-shrink-0 rounded-full bg-white p-2 text-[#1a1226] hover:bg-white/90"
                     >
                       <ArrowUp size={16} weight="bold" />
                     </button>
                   </div>
                   {micError && (
-                    <div className="mt-3 text-xs font-medium text-rose-600">
+                    <div className="mt-3 text-xs font-medium text-rose-300">
                       {micError}
                     </div>
                   )}
@@ -458,10 +428,10 @@ function SessionPage({
                   <div
                     onDragOver={(event) => event.preventDefault()}
                     onDrop={handleDrop}
-                    className="relative flex min-h-[140px] flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-400 bg-white/80 p-6 text-center text-sm text-neutral-600 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.6)]"
+                    className="relative flex min-h-[140px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/30 bg-white/10 p-6 text-center text-sm text-white/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]"
                   >
                     Add course materials here
-                    <div className="mt-2 text-xs text-neutral-400">
+                    <div className="mt-2 text-xs text-white/50">
                       or click to upload
                     </div>
                     <input
@@ -476,26 +446,26 @@ function SessionPage({
                     {sources.map((source) => (
                       <div
                         key={source.id}
-                        className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/90 px-3 py-2 text-sm shadow-sm"
+                        className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-sm shadow-sm"
                       >
                         <div className="min-w-0">
-                          <div className="truncate font-medium text-neutral-800">
+                          <div className="truncate font-medium text-white">
                             {source.name}
                           </div>
-                          <div className="text-xs text-neutral-400">
+                          <div className="text-xs text-white/50">
                             {(source.size / 1024).toFixed(1)} KB
                           </div>
                         </div>
                         <button
                           onClick={() => handleRemoveSource(source.id)}
-                          className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-600 hover:bg-neutral-200"
+                          className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/80 hover:bg-white/20"
                         >
                           Remove
                         </button>
                       </div>
                     ))}
                     {!sources.length && (
-                      <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 px-3 py-6 text-center text-xs text-neutral-400">
+                      <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 px-3 py-6 text-center text-xs text-white/50">
                         No sources yet. Add files to ground the lecture.
                       </div>
                     )}

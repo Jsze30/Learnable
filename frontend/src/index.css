@@ -142,11 +142,7 @@ h6 {
 }
 
 .page-fade-in {
-  animation: pageFadeIn 260ms ease-out both;
-}
-
-.page-fade-out {
-  animation: pageFadeOut 220ms ease-in both;
+  animation: pageHoverIn 140ms ease-out both;
 }
 
 .session-panel-enter {
@@ -158,28 +154,17 @@ h6 {
 }
 
 .landing-input-exit {
-  animation: inputOut 200ms ease-in both;
+  animation: inputOut 120ms ease-in both;
 }
 
-@keyframes pageFadeIn {
+@keyframes pageHoverIn {
   from {
-    opacity: 0;
-    transform: scale(0.995);
+    opacity: 0.6;
+    transform: translateY(8px) scale(0.995);
   }
   to {
     opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes pageFadeOut {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.995);
+    transform: translateY(0) scale(1);
   }
 }
 
