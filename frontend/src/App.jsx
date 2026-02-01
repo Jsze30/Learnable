@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUp, Microphone } from '@phosphor-icons/react'
 import Beams from '@/components/Beams'
+import SplitText from '@/components/SplitText'
 import SessionPage from '@/components/SessionPage'
 import SubjectTabManager from '@/components/SubjectTabManager'
 
@@ -35,11 +36,12 @@ function App() {
   const [activeTab, setActiveTab] = useState('chat')
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [autoStartMic, setAutoStartMic] = useState(false)
-  const [isTabManagerCollapsed, setIsTabManagerCollapsed] = useState(false)
+  const [isTabManagerCollapsed, setIsTabManagerCollapsed] = useState(true)
   const [subjects, setSubjects] = useState([])
   const [activeSubjectId, setActiveSubjectId] = useState(null)
   const fileInputRef = useRef(null)
   const transitionTimeoutRef = useRef(null)
+  const [landingKey, setLandingKey] = useState(0)
 
   useEffect(() => {
     if (!subjects.length) {
@@ -60,6 +62,12 @@ function App() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (page === 'landing') {
+      setLandingKey((prev) => prev + 1)
+    }
+  }, [page])
 
   const activeSubject = useMemo(() => {
     return subjects.find((subject) => subject.id === activeSubjectId) || null
@@ -110,8 +118,8 @@ function App() {
     setIsDragging(false)
     const files = Array.from(e.dataTransfer.files)
     if (!files.length) return
-    if (!activeSubjectId) return
-    updateSubjectById(activeSubjectId, (subject) => ({
+    const targetSubjectId = ensureSubjectForSession()
+    updateSubjectById(targetSubjectId, (subject) => ({
       ...subject,
       sources: mergeSources(subject.sources, files),
     }))
@@ -120,11 +128,12 @@ function App() {
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
-    if (!activeSubjectId) return
-    updateSubjectById(activeSubjectId, (subject) => ({
+    const targetSubjectId = ensureSubjectForSession()
+    updateSubjectById(targetSubjectId, (subject) => ({
       ...subject,
       sources: mergeSources(subject.sources, files),
     }))
+    e.target.value = ''
   }
 
   const handleSendChat = () => {
@@ -274,9 +283,21 @@ function App() {
 
                 {/* Main Content */}
                 <main className="flex flex-1 flex-col items-center justify-center gap-8 text-center">
-                  <h1 className="text-4xl font-bold text-white drop-shadow-lg md:text-5xl">
-                    Your personalized AI lecturer
-                  </h1>
+                  <SplitText
+                    key={landingKey}
+                    tag="h1"
+                    text="Your personalized AI lecturer"
+                    className="text-4xl font-bold text-white drop-shadow-lg md:text-5xl font-['Inter']"
+                    delay={30}
+                    duration={0.3}
+                    ease="power3.out"
+                    splitType="chars"
+                    from={{ opacity: 0, y: 40 }}
+                    to={{ opacity: 1, y: 0 }}
+                    threshold={0.1}
+                    rootMargin="-100px"
+                    textAlign="center"
+                  />
 
                   <div className="w-full max-w-2xl">
                     {/* Upload Box */}
