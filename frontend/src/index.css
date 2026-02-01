@@ -140,3 +140,78 @@ h6 {
     @apply bg-background text-foreground;
   }
 }
+
+.page-fade-in {
+  animation: pageFadeIn 260ms ease-out both;
+}
+
+.page-fade-out {
+  animation: pageFadeOut 220ms ease-in both;
+}
+
+.session-panel-enter {
+  animation: panelIn 300ms ease-out both;
+}
+
+.session-input-enter {
+  animation: inputIn 320ms ease-out 60ms both;
+}
+
+.landing-input-exit {
+  animation: inputOut 200ms ease-in both;
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pageFadeOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.995);
+  }
+}
+
+@keyframes panelIn {
+  from {
+    transform: translateX(40px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes inputIn {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes inputOut {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+}
