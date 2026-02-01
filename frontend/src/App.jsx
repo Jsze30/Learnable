@@ -1,18 +1,100 @@
-import { useState, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUp, Microphone } from '@phosphor-icons/react'
 import Beams from '@/components/Beams'
 import SessionPage from '@/components/SessionPage'
+import SubjectTabManager from '@/components/SubjectTabManager'
+
+const makeSubjectId = () => {
+  if (typeof crypto?.randomUUID === 'function') {
+    return `subject-${crypto.randomUUID()}`
+  }
+  return `subject-${Math.random().toString(36).slice(2, 10)}`
+}
+
+const createSubject = (name) => ({
+  id: makeSubjectId(),
+  name,
+  chatMessages: [],
+  sources: [],
+})
+
+const mergeSources = (existing, files) => {
+  const incoming = files.map((file) => ({
+    id: `${file.name}-${file.size}-${file.lastModified}`,
+    name: file.name,
+    size: file.size,
+  }))
+  const known = new Set(existing.map((item) => item.id))
+  return [...existing, ...incoming.filter((item) => !known.has(item.id))]
+}
 
 function App() {
   const [isDragging, setIsDragging] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState([])
   const [chatInput, setChatInput] = useState('')
   const [page, setPage] = useState('landing')
   const [activeTab, setActiveTab] = useState('chat')
-  const [sessionPrompt, setSessionPrompt] = useState('')
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [autoStartMic, setAutoStartMic] = useState(false)
+  const [isTabManagerCollapsed, setIsTabManagerCollapsed] = useState(false)
+  const [subjects, setSubjects] = useState([])
+  const [activeSubjectId, setActiveSubjectId] = useState(null)
   const fileInputRef = useRef(null)
+  const transitionTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    if (!subjects.length) {
+      if (activeSubjectId !== null) {
+        setActiveSubjectId(null)
+      }
+      return
+    }
+    if (!subjects.some((subject) => subject.id === activeSubjectId)) {
+      setActiveSubjectId(subjects[0].id)
+    }
+  }, [activeSubjectId, subjects])
+
+  useEffect(() => {
+    return () => {
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const activeSubject = useMemo(() => {
+    return subjects.find((subject) => subject.id === activeSubjectId) || null
+  }, [activeSubjectId, subjects])
+
+  const updateSubjectById = (subjectId, updater) => {
+    if (!subjectId) return
+    setSubjects((prev) =>
+      prev.map((subject) =>
+        subject.id === subjectId ? updater(subject) : subject
+      )
+    )
+  }
+
+  const getNextSubjectName = (existing) =>
+    `New Subject ${existing.length + 1}`
+
+  const ensureSubjectForSession = () => {
+    if (activeSubjectId) return activeSubjectId
+    const newSubject = createSubject(getNextSubjectName(subjects))
+    setSubjects((prev) => [...prev, newSubject])
+    setActiveSubjectId(newSubject.id)
+    return newSubject.id
+  }
+
+  const triggerSessionTransition = () => {
+    if (transitionTimeoutRef.current) {
+      clearTimeout(transitionTimeoutRef.current)
+    }
+    setPage('session')
+    setIsTransitioning(true)
+    transitionTimeoutRef.current = setTimeout(() => {
+      setIsTransitioning(false)
+    }, 50)
+  }
 
   const handleDragOver = (e) => {
     e.preventDefault()
@@ -27,160 +109,273 @@ function App() {
     e.preventDefault()
     setIsDragging(false)
     const files = Array.from(e.dataTransfer.files)
-    setUploadedFiles([...uploadedFiles, ...files])
+    if (!files.length) return
+    if (!activeSubjectId) return
+    updateSubjectById(activeSubjectId, (subject) => ({
+      ...subject,
+      sources: mergeSources(subject.sources, files),
+    }))
   }
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || [])
-    setUploadedFiles([...uploadedFiles, ...files])
+    if (!files.length) return
+    if (!activeSubjectId) return
+    updateSubjectById(activeSubjectId, (subject) => ({
+      ...subject,
+      sources: mergeSources(subject.sources, files),
+    }))
   }
 
   const handleSendChat = () => {
     const prompt = chatInput.trim()
     if (!prompt) return
-    setSessionPrompt(prompt)
+    const targetSubjectId = ensureSubjectForSession()
     setAutoStartMic(false)
     setChatInput('')
-    setIsTransitioning(true)
-    setTimeout(() => {
-      setPage('session')
-      setIsTransitioning(false)
-    }, 260)
+    updateSubjectById(targetSubjectId, (subject) => ({
+      ...subject,
+      chatMessages: [
+        ...subject.chatMessages,
+        { id: `prompt-${Date.now()}`, role: 'user', text: prompt },
+      ],
+    }))
+    triggerSessionTransition()
   }
 
-  const showLanding = page === 'landing'
-  const showSession = page === 'session' || isTransitioning
+  const handleAddSubject = () => {
+    const subjectIndex = subjects.length + 1
+    const newSubject = createSubject(`New Subject ${subjectIndex}`)
+    setSubjects((prev) => [...prev, newSubject])
+    setActiveSubjectId(newSubject.id)
+    setChatInput('')
+    setActiveTab('chat')
+    setIsTransitioning(false)
+    setAutoStartMic(false)
+    setPage('landing')
+  }
+
+  const handleDeleteSubject = (id) => {
+    setSubjects((prev) => {
+      const next = prev.filter((subject) => subject.id !== id)
+      if (!next.length) {
+        setActiveSubjectId(null)
+        setPage('landing')
+        setIsTransitioning(false)
+        return next
+      }
+      if (activeSubjectId === id && next.length) {
+        const mostRecent = next[next.length - 1]
+        setActiveSubjectId(mostRecent.id)
+        if (mostRecent.chatMessages.length) {
+          triggerSessionTransition()
+        } else {
+          setPage('landing')
+          setIsTransitioning(false)
+        }
+      } else if (activeSubjectId === id) {
+        setActiveSubjectId(null)
+        setPage('landing')
+        setIsTransitioning(false)
+      }
+      return next
+    })
+  }
+
+  const handleChatMessagesChange = (updater) => {
+    updateSubjectById(activeSubjectId, (subject) => {
+      const nextMessages =
+        typeof updater === 'function' ? updater(subject.chatMessages) : updater
+      return { ...subject, chatMessages: nextMessages }
+    })
+  }
+
+  const handleSourcesChange = (updater) => {
+    updateSubjectById(activeSubjectId, (subject) => {
+      const nextSources =
+        typeof updater === 'function' ? updater(subject.sources) : updater
+      return { ...subject, sources: nextSources }
+    })
+  }
+
+  const handleSelectSubject = (id) => {
+    if (id === activeSubjectId) return
+    setActiveSubjectId(id)
+    const selected = subjects.find((subject) => subject.id === id)
+    if (selected?.chatMessages?.length) {
+      if (page === 'session' && !isTransitioning) {
+        setPage('session')
+        setIsTransitioning(false)
+      } else {
+        triggerSessionTransition()
+      }
+    } else {
+      setPage('landing')
+      setIsTransitioning(false)
+    }
+    setAutoStartMic(false)
+  }
+
+  const handleRenameSubject = (id, name) => {
+    setSubjects((prev) =>
+      prev.map((subject) => (subject.id === id ? { ...subject, name } : subject))
+    )
+  }
+
+  const handleStartMicFromLanding = () => {
+    ensureSubjectForSession()
+    setAutoStartMic(true)
+    triggerSessionTransition()
+  }
+
+  const showLanding =
+    page === 'landing' || !activeSubjectId || (page === 'session' && isTransitioning)
+  const showSession = activeSubjectId && (page === 'session' || isTransitioning)
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      {showLanding && (
-        <div
-          className={`absolute inset-0 bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 ${
-            isTransitioning ? 'page-fade-out' : ''
-          }`}
-        >
-          <div className="absolute inset-0">
-            <Beams
-              beamWidth={2.6}
-              beamHeight={22}
-              beamNumber={9}
-              lightColor="#ceadff"
-              speed={1.1}
-              noiseIntensity={0.19}
-              scale={0.22}
-              rotation={30}
-            />
-          </div>
+    <div className="min-h-screen overflow-hidden">
+      <div className="flex min-h-screen w-full">
+        <SubjectTabManager
+          subjects={subjects}
+          activeSubjectId={activeSubjectId}
+          isCollapsed={isTabManagerCollapsed}
+          onToggleCollapse={() =>
+            setIsTabManagerCollapsed((prev) => !prev)
+          }
+          onSelect={handleSelectSubject}
+          onAdd={handleAddSubject}
+          onDelete={handleDeleteSubject}
+          onRename={handleRenameSubject}
+        />
 
-          <div className="relative z-10 flex min-h-screen w-full flex-col px-6 py-8">
-            {/* Header */}
-            <header className="text-2xl font-bold text-white drop-shadow-lg">
-              LearnIt
-            </header>
-
-            {/* Main Content */}
-            <main className="flex flex-1 flex-col items-center justify-center gap-8 text-center">
-              <h1 className="text-4xl font-bold text-white drop-shadow-lg md:text-5xl">
-                Your personalized AI lecturer
-              </h1>
-
-              <div className="w-full max-w-2xl">
-                {/* Upload Box */}
-                <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`mb-4 cursor-pointer rounded-2xl border-2 border-dashed p-6 transition-colors ${
-                    isDragging
-                      ? 'border-white bg-white/20'
-                      : 'border-white/50 bg-white/10 hover:bg-white/15'
-                  }`}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  <p className="text-sm font-semibold text-white">
-                    Upload your course materials here
-                  </p>
-                  {uploadedFiles.length > 0 && (
-                    <div className="mt-3 text-left">
-                      <p className="text-xs text-white/80">Uploaded files:</p>
-                      <ul className="mt-2 space-y-1">
-                        {uploadedFiles.map((file, idx) => (
-                          <li key={idx} className="text-xs text-white/70 truncate">
-                            • {file.name}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-
-                {/* Chat Input Bar */}
-                <div
-                  className={`flex items-center gap-2 rounded-full bg-white/10 px-4 py-3 backdrop-blur-md ${
-                    isTransitioning ? 'landing-input-exit' : ''
-                  }`}
-                >
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                    placeholder="Ask anything"
-                    className="flex-1 bg-transparent text-white placeholder:text-white/50 outline-none"
-                  />
-                  <button
-                    onClick={() => {
-                      setAutoStartMic(true)
-                      setIsTransitioning(true)
-                      setTimeout(() => {
-                        setPage('session')
-                        setIsTransitioning(false)
-                      }, 260)
-                    }}
-                    className="flex-shrink-0 text-white/70 hover:text-white"
-                  >
-                    <Microphone size={20} />
-                  </button>
-                  <button
-                    onClick={handleSendChat}
-                    className="flex-shrink-0 rounded-full bg-black p-2 text-white hover:bg-black/80"
-                  >
-                    <ArrowUp size={16} weight="bold" />
-                  </button>
-                </div>
+        <div className="relative flex-1 overflow-hidden bg-[#0a0a0f]">
+          {showLanding && (
+            <div
+              className="absolute inset-0 bg-[#0a0a0f]"
+            >
+              <div className="absolute inset-0">
+                <Beams
+                  beamWidth={2.6}
+                  beamHeight={22}
+                  beamNumber={9}
+                  lightColor="#ceadff"
+                  speed={1.1}
+                  noiseIntensity={0.19}
+                  scale={0.22}
+                  rotation={30}
+                />
               </div>
-            </main>
-          </div>
-        </div>
-      )}
 
-      {showSession && (
-        <div
-          className={`absolute inset-0 ${
-            isTransitioning ? 'page-fade-in' : ''
-          }`}
-        >
-          <SessionPage
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            sessionPrompt={sessionPrompt}
-            animateIn={isTransitioning}
-            uploadedFiles={uploadedFiles}
-            onBack={() => {
-              setPage('landing')
-              setAutoStartMic(false)
-            }}
-            autoStartMic={autoStartMic}
-          />
+              <div className="relative z-10 flex min-h-screen w-full flex-col px-6 py-8">
+                {/* Header */}
+                <header className="text-2xl font-bold text-white drop-shadow-lg">
+                  LearnIt
+                </header>
+
+                {/* Main Content */}
+                <main className="flex flex-1 flex-col items-center justify-center gap-8 text-center">
+                  <h1 className="text-4xl font-bold text-white drop-shadow-lg md:text-5xl">
+                    Your personalized AI lecturer
+                  </h1>
+
+                  <div className="w-full max-w-2xl">
+                    {/* Upload Box */}
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`mb-4 cursor-pointer rounded-2xl border-2 border-dashed p-6 transition-colors ${
+                        isDragging
+                          ? 'border-white bg-white/20'
+                          : 'border-white/50 bg-white/10 hover:bg-white/15'
+                      }`}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                      <p className="text-sm font-semibold text-white">
+                        Upload your course materials here
+                      </p>
+                      {activeSubject?.sources?.length > 0 && (
+                        <div className="mt-3 text-left">
+                          <p className="text-xs text-white/80">Uploaded files:</p>
+                          <ul className="mt-2 space-y-1">
+                            {activeSubject.sources.map((file) => (
+                              <li
+                                key={file.id}
+                                className="text-xs text-white/70 truncate"
+                              >
+                                • {file.name}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Chat Input Bar */}
+                    <div
+                      className={`flex items-center gap-2 rounded-full bg-white/10 px-4 py-3 backdrop-blur-md ${
+                        isTransitioning ? 'landing-input-exit' : ''
+                      }`}
+                    >
+                      <input
+                        type="text"
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+                        placeholder="Ask anything"
+                        className="flex-1 bg-transparent text-white placeholder:text-white/50 outline-none"
+                      />
+                      <button
+                        onClick={handleStartMicFromLanding}
+                        className="flex-shrink-0 text-white/70 hover:text-white"
+                      >
+                        <Microphone size={20} />
+                      </button>
+                      <button
+                        onClick={handleSendChat}
+                        className="flex-shrink-0 rounded-full bg-black p-2 text-white hover:bg-black/80"
+                      >
+                        <ArrowUp size={16} weight="bold" />
+                      </button>
+                    </div>
+                  </div>
+                </main>
+              </div>
+            </div>
+          )}
+
+          {showSession && (
+            <div
+              className={`absolute inset-0 ${
+                isTransitioning ? 'page-fade-in' : ''
+              }`}
+            >
+              <SessionPage
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                animateIn={isTransitioning}
+                projectName="LearnIt"
+                sources={activeSubject?.sources || []}
+                onSourcesChange={handleSourcesChange}
+                chatMessages={activeSubject?.chatMessages || []}
+                onChatMessagesChange={handleChatMessagesChange}
+                onBack={() => {
+                  setPage('landing')
+                  setAutoStartMic(false)
+                }}
+                autoStartMic={autoStartMic}
+              />
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

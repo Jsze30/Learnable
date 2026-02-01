@@ -1,5 +1,6 @@
 .vscode/
 components.json
+components copilot.json
 **/node_modules/
 **/venv/
 **/.env
