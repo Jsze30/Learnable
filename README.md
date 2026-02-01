@@ -4,22 +4,22 @@
 
 Traditional education often relies on static textbooks and one-size-fits-all lecture formats that don't engage all learning styles. Students struggle to find personalized, visual explanations of complex topics, and educators spend countless hours creating educational content. The process of transforming educational materials (like PDFs) into engaging, animated video lectures is time-consuming, expensive, and requires specialized skills in both pedagogy and video production.
 
-EasyLearn solves this by automating the entire process of generating professional-quality educational videos from source materials in minutes.
+Learnable solves this by automating the entire process of generating professional-quality educational videos from source materials in minutes.
 
 ## Our Solution
 
-EasyLearn is an AI-powered educational content generation platform that transforms course materials and prompts into engaging animated video lectures. The system uses a multi-phase pipeline that leverages state-of-the-art LLMs and the ManimGL animation engine (used by 3Blue1Brown) to create visually stunning educational videos with synchronized narration.
+Learnable is an AI-powered educational content generation platform that transforms course materials and prompts into engaging animated video lectures. The system uses a multi-phase pipeline that leverages state-of-the-art LLMs and the ManimGL animation engine (used by 3Blue1Brown) to create visually stunning educational videos with synchronized narration.
 
 Users can:
 
-- Upload PDF course materials or provide text
+- Upload course materials
 - Request videos on specific topics
 - Interact with an AI voice tutor in real-time
 - Get automatically generated, professionally-animated video lectures complete with synchronized narration
 
 ## Our Overall Architecture
 
-EasyLearn is built as a distributed system with four main components:
+Learnable is built as a distributed system with four main components:
 
 ### 1. **Frontend (React + Vite)**
 
@@ -56,7 +56,7 @@ Located in `/backend`, this is the core content generation engine with a three-p
 **API Server** (`api.py`)
 
 - Flask REST API that orchestrates the full pipeline
-- Handles multipart file uploads (PDFs up to 50MB)
+- Handles multipart file uploads
 - Manages video generation requests and returns video paths
 - CORS-enabled for frontend integration
 
@@ -71,7 +71,7 @@ Located in `/backend`, this is the core content generation engine with a three-p
 Located in `/voice_agent`, this is a real-time conversational AI tutor:
 
 - Uses LiveKit for WebRTC-based real-time communication
-- Integrates with Deepgram for speech recognition (via `deepgram/nova-3`)
+- Integrates with Deepgram for speech recognition
 - Uses OpenAI GPT-4.1-mini as the language model
 - Dynamically loads course context from PDFs
 - Provides personalized tutoring sessions with natural conversation flow
@@ -91,7 +91,7 @@ Located in `/token_server`, this is a lightweight authentication service:
 
 - **Automated Lesson Planning**: AI-generated structured lesson plans from course materials
 - **Intelligent Script Generation**: LLM-powered narration scripts optimized for TTS
-- **Professional Animation**: ManimGL-based animations that match mathematical and educational content
+- **Professional Animation**: 3Blue1Brown style animations that match mathematical and educational content
 - **Quality Video Output**: Rendered videos with synchronized audio and visuals
 - **Flexible Input**: Support for PDF uploads or direct text input
 
