@@ -124,25 +124,32 @@ def narration_segments() -> List[Tuple[str, str]]:
     """
     return [
         (
-            "Welcome! In this video we'll explore the idea of backtracking, "
-            "a systematic way of trying every possibility until we find a solution.",
+            "In this video we’ll see how the generic backtracking pattern solves the classic n‑Queens puzzle.",
             "seg1.wav",
         ),
         (
-            "Think of a decision tree where each node represents a partial solution. "
-            "We explore one branch depth‑first, building choices step by step.",
+            "We represent the board as an array Q where Q[row] gives the column of the queen in that row.",
             "seg2.wav",
         ),
         (
-            "Imagine a tiny recursion fairy walking down a branching maze, "
-            "leaving a breadcrumb for the current partial solution. "
-            "When she hits a dead end, she lifts the breadcrumb and tries the next corridor.",
+            "For each row we try every column, placing a queen only if it isn’t attacked by any previously placed queen.",
             "seg3.wav",
         ),
         (
-            "Because we eventually visit every branch, backtracking guarantees that if a solution "
-            "exists in a finite tree, we'll find it – or we can stop at the first one.",
+            "A conflict occurs when two queens share the same column or lie on the same diagonal; we reject those placements.",
             "seg4.wav",
+        ),
+        (
+            "If the placement is safe we recurse to the next row; when we reach row n plus one we have found a complete solution.",
+            "seg5.wav",
+        ),
+        (
+            "If no column works in a row we backtrack: remove the queen from the previous row and try the next column there.",
+            "seg6.wav",
+        ),
+        (
+            "By depth‑first exploring the decision tree and backtracking on dead ends, we enumerate all possible solutions to the n‑Queens problem.",
+            "seg7.wav",
         ),
     ]
 

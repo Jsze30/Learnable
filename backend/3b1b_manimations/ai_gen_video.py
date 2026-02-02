@@ -1,17 +1,22 @@
 # ai_gen_video.py
+# [ ] Only ManimGL documented/template APIs used
+# [ ] Class name is Video2
+# [ ] Narration audio loaded from ai_gen_audio.py output (narration.wav)
+# [ ] Sync uses explicit beats / waits
+# [ ] No overly complex animations
+# [ ] On-screen layout safe and readable
+# [ ] Produces mp4 via template’s method
 
 import wave
 import contextlib
 from pathlib import Path
-from typing import Callable, List, Tuple
+from typing import Callable, List, Tuple, Optional
 
 from manimlib import (
-    Scene, VGroup, Text, Dot, Line, Rectangle, Circle,
+    Scene, VGroup, Text, Dot, Line, Rectangle,
     FadeIn, FadeOut, Write, ShowCreation, GrowFromCenter,
-    Transform, ReplacementTransform, Indicate, SurroundingRectangle,
-    ApplyMethod,
-    YELLOW, GREEN, RED, GREY_B, WHITE, ORIGIN,
-    UP, DOWN, LEFT, RIGHT
+    Indicate, SurroundingRectangle,
+    YELLOW, GREY_B, WHITE, ORIGIN, UP, DOWN, LEFT, RIGHT
 )
 
 # ----------------------------
@@ -20,6 +25,7 @@ from manimlib import (
 def wav_duration_seconds(path: Path) -> float:
     with contextlib.closing(wave.open(str(path), "rb")) as wf:
         return wf.getnframes() / float(wf.getframerate())
+
 
 def safe_wait(scene: Scene, seconds: float, cap: float = 120.0):
     """Never let bad durations cause a forever-wait."""
@@ -36,19 +42,38 @@ def title_card(title: str, subtitle: str = "", *, title_size=48, subtitle_size=2
         return VGroup(t, s)
     return VGroup(t)
 
+
 def callout_box(mob, *, color=YELLOW, buff=0.25):
     return SurroundingRectangle(mob, color=color, buff=buff)
+
 
 def make_node(label: str, color=WHITE):
     dot = Dot(radius=0.06, color=color)
     txt = Text(label, font_size=22, color=color).next_to(dot, RIGHT, buff=0.12)
     return VGroup(dot, txt)
 
+
 def connect_nodes(a: VGroup, b: VGroup, color=GREY_B, stroke_width=3):
     return Line(a[0].get_center(), b[0].get_center(), color=color, stroke_width=stroke_width)
 
+
 def simple_box_label(box: Rectangle, label: str):
     return Text(label, font_size=26, color=GREY_B).next_to(box, UP, buff=0.2)
+
+
+# ----------------------------
+# Clearing helpers (CRITICAL)
+# ----------------------------
+def clear_group(scene: Scene, group: VGroup, *, run_time: float = 0.6):
+    """
+    Explicitly clears a visual region.
+    ALWAYS call this before drawing new visuals
+    in the same screen location.
+    """
+    if group is None or len(group) == 0:
+        return
+    scene.play(FadeOut(group), run_time=run_time)
+    scene.remove(group)
 
 
 # ----------------------------
@@ -67,6 +92,7 @@ class NarratedTimelineScene(Scene):
         return self.NARRATION_PATH
 
     def build_timeline(self) -> List[Beat]:
+        """Override in child classes."""
         return []
 
     def construct(self):
@@ -91,158 +117,172 @@ class NarratedTimelineScene(Scene):
 
 
 # ----------------------------
-# Video 1 – “What Is Backtracking? The “Try‑Everything” Mindset”
+# Video 2: Backtracking in Action – n‑Queens
 # ----------------------------
-class Video1(NarratedTimelineScene):
+class Video2(NarratedTimelineScene):
     def build_timeline(self) -> List[Beat]:
-        # -------------------------------------------------
-        # Determine timestamps from individual segment files
-        # -------------------------------------------------
-        seg_files = ["intro.wav", "contrast.wav", "maze.wav", "dfs.wav"]
-        seg_paths = [Path("assets/sounds") / f for f in seg_files]
-        seg_durs = [wav_duration_seconds(p) for p in seg_paths]
-
-        # cumulative start times
-        starts = [0.0]
-        for d in seg_durs[:-1]:
-            starts.append(starts[-1] + d)
-
-        # -------------------------------------------------
-        # Pre‑build visual objects (shared across beats)
-        # -------------------------------------------------
-        # Title
+        # ----------------------------
+        # Static layout objects
+        # ----------------------------
         header = title_card(
-            "What Is Backtracking?",
-            "The “Try‑Everything” Mindset"
+            "Backtracking in Action: Solving the n‑Queens Puzzle",
+            "How a simple recursive search finds all solutions"
         ).to_edge(UP, buff=0.6)
 
-        # Definition segment (intro)
-        def_text = Text(
-            "Backtracking is a systematic brute‑force search.\n"
-            "We build a solution piece‑by‑piece, and whenever a partial\n"
-            "choice violates a constraint we step back and try a different option.",
-            font_size=28,
-            color=WHITE,
-            line_spacing=0.8
-        ).to_edge(LEFT, buff=0.8).shift(DOWN * 0.2)
+        # Left region – chessboard illustration
+        left_box = Rectangle(
+            width=5.4, height=3.4, stroke_width=3, stroke_color=GREY_B
+        ).to_edge(LEFT, buff=0.7).shift(DOWN * 0.6)
+        left_label = simple_box_label(left_box, "Board (row‑by‑row)")
 
-        # Simple diagram for definition
-        d_center = LEFT * 3 + DOWN * 1
-        part_a = Dot(d_center + LEFT * 1.5, color=GREEN)
-        part_b = Dot(d_center + RIGHT * 1.5, color=GREEN)
-        part_arrow = Line(part_a.get_center(), part_b.get_center(), color=GREY_B, stroke_width=3)
-        backtrack_arrow = Line(part_b.get_center(), part_a.get_center(), color=RED, stroke_width=3, dash_length=0.1)
+        # Right region – decision tree illustration
+        right_box = Rectangle(
+            width=5.4, height=3.4, stroke_width=3, stroke_color=GREY_B
+        ).to_edge(RIGHT, buff=0.7).shift(DOWN * 0.6)
+        right_label = simple_box_label(right_box, "Decision Tree")
 
-        # Contrast segment
-        # Greedy path (straight line)
-        greedy_line = Line(LEFT * 4 + UP * 1, LEFT * 2 + UP * 1, color=YELLOW, stroke_width=4)
-        greedy_label = Text("Greedy / Heuristic", font_size=24, color=YELLOW).next_to(greedy_line, UP)
+        # ----------------------------
+        # Board states (simple text diagrams)
+        # ----------------------------
+        def board_text(state: List[Optional[int]]) -> Text:
+            """
+            state[i] = column index of queen in row i (0‑based) or None.
+            """
+            rows = []
+            n = 4  # 4×4 board – enough to illustrate the idea
+            for r in range(n):
+                cols = []
+                for c in range(n):
+                    if state[r] is not None and state[r] == c:
+                        cols.append("Q")
+                    else:
+                        cols.append(".")
+                rows.append(" ".join(cols))
+            return Text("\n".join(rows), font_size=28, color=WHITE, alignment="LEFT")
 
-        # Exhaustive tree (binary tree)
-        tree_root = make_node("root").move_to(RIGHT * 2 + UP * 1.5)
-        left_child = make_node("L").move_to(RIGHT * 1 + UP * 0.5)
-        right_child = make_node("R").move_to(RIGHT * 3 + UP * 0.5)
-        edge_l = connect_nodes(tree_root, left_child)
-        edge_r = connect_nodes(tree_root, right_child)
-        tree_group = VGroup(tree_root, left_child, right_child, edge_l, edge_r)
-        tree_label = Text("Exhaustive Search", font_size=24, color=GREY_B).next_to(tree_group, UP)
+        board_empty = board_text([None, None, None, None])
+        board_row1 = board_text([1, None, None, None])          # queen at (0,1)
+        board_row1_row2 = board_text([1, 3, None, None])       # second queen placed safely
+        board_conflict = board_text([1, 2, None, None])        # conflict example (same diagonal)
+        board_backtrack = board_text([1, None, None, None])    # after backtrack
 
-        # Maze segment
-        # Build a tiny 3x3 grid (9 squares)
-        squares = VGroup(*[
-            Rectangle(width=0.8, height=0.8, stroke_width=2, stroke_color=GREY_B)
-            .move_to(LEFT * 2 + DOWN * 2 + 0.9 * (i % 3) * RIGHT + 0.9 * (i // 3) * UP)
-            for i in range(9)
-        ])
-        explorer = Dot(radius=0.12, color=YELLOW).move_to(squares[0].get_center())
-        maze_label = Text("Maze Explorer", font_size=24, color=WHITE).to_edge(UP, buff=0.8)
+        # Group each state for easy clearing
+        board_states = {
+            "empty": VGroup(board_empty),
+            "row1": VGroup(board_row1),
+            "row1_row2": VGroup(board_row1_row2),
+            "conflict": VGroup(board_conflict),
+            "backtrack": VGroup(board_backtrack),
+        }
 
-        # DFS recursion tree segment
-        # Binary tree depth 3
-        nodes = []
-        edges = []
-        for depth in range(3):
-            for i in range(2 ** depth):
-                label = f"N{depth}_{i}"
-                node = make_node(label).move_to(LEFT * 3 + RIGHT * (i * 1.5) + UP * (2 - depth) * 1.2)
-                nodes.append(node)
-                if depth > 0:
-                    parent_idx = (i // 2) + sum(2 ** d for d in range(depth - 1))
-                    edge = connect_nodes(nodes[parent_idx], node)
-                    edges.append(edge)
-        tree = VGroup(*nodes, *edges)
-        dfs_label = Text("Depth‑First Traversal", font_size=24, color=WHITE).to_edge(UP, buff=0.8)
+        # Position boards inside left box
+        for grp in board_states.values():
+            grp.move_to(left_box.get_center())
 
-        # End card
-        end_card = VGroup(
-            Text("Take‑away:", font_size=30, color=GREY_B),
-            Text("Backtracking = try everything, prune when impossible.", font_size=34, color=WHITE),
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.2).move_to(ORIGIN)
-        end_box = SurroundingRectangle(end_card, color=GREY_B, buff=0.35)
+        # ----------------------------
+        # Decision‑tree diagram (very small)
+        # ----------------------------
+        tc = right_box.get_center()
+        root = make_node("row 1").move_to(tc + UP * 1.0)
+        c1 = make_node("col 1").move_to(tc + LEFT * 1.3 + DOWN * 0.2)
+        c2 = make_node("col 2").move_to(tc + RIGHT * 1.3 + DOWN * 0.2)
+        e1 = connect_nodes(root, c1)
+        e2 = connect_nodes(root, c2)
+        tree_group = VGroup(root, c1, c2, e1, e2)
 
-        # -------------------------------------------------
-        # Action helpers
-        # -------------------------------------------------
+        # ----------------------------
+        # Tracking active groups for clearing
+        # ----------------------------
+        active_left: Optional[VGroup] = None
+        active_right: Optional[VGroup] = None
+
+        # ----------------------------
+        # Helper actions (kept short)
+        # ----------------------------
         def show_title():
-            self.play(Write(header), run_time=1.0)
+            self.play(Write(header), run_time=0.9)
 
-        def show_definition():
-            self.play(FadeIn(def_text), run_time=1.2)
-            self.play(FadeIn(part_a), FadeIn(part_b), ShowCreation(part_arrow), run_time=0.8)
-            self.play(Indicate(backtrack_arrow, color=RED), run_time=0.6)
-
-        def show_contrast():
-            self.play(FadeIn(greedy_line), FadeIn(greedy_label), run_time=0.8)
-            self.play(FadeIn(tree_group), FadeIn(tree_label), run_time=0.9)
-
-        def show_maze():
-            self.play(FadeIn(squares), FadeIn(maze_label), run_time=0.9)
-            self.play(FadeIn(explorer), run_time=0.5)
-            # simple path: forward 2 steps, backtrack, forward another
-            path = [
-                squares[0].get_center(),
-                squares[1].get_center(),
-                squares[2].get_center(),
-                squares[5].get_center(),
-                squares[4].get_center(),
-                squares[3].get_center(),
-                squares[6].get_center(),
-            ]
-            for pt in path:
-                self.play(ApplyMethod(explorer.move_to, pt), run_time=0.4)
-            self.play(Indicate(explorer, color=RED), run_time=0.5)
-
-        def show_dfs():
-            self.play(FadeIn(tree), FadeIn(dfs_label), run_time=1.0)
-            # simulate depth‑first traversal with a highlight dot
-            highlight = Dot(radius=0.09, color=YELLOW).move_to(nodes[0][0].get_center())
-            self.play(FadeIn(highlight), run_time=0.5)
-            order = [0, 1, 3, 4, 2, 5, 6]  # pre‑order indices of nodes list
-            for idx in order:
-                target = nodes[idx][0].get_center()
-                self.play(ApplyMethod(highlight.move_to, target), run_time=0.4)
-            self.play(FadeOut(highlight), run_time=0.4)
-
-        def wrap_up():
+        def show_layout():
             self.play(
-                FadeOut(VGroup(header, def_text, part_a, part_b, part_arrow, backtrack_arrow,
-                               greedy_line, greedy_label, tree_group, tree_label,
-                               squares, explorer, maze_label,
-                               tree, dfs_label)),
-                run_time=0.8
+                FadeIn(left_box), FadeIn(right_box),
+                FadeIn(left_label), FadeIn(right_label),
+                run_time=0.6,
             )
-            self.play(FadeIn(end_box), FadeIn(end_card), run_time=1.0)
 
-        # -------------------------------------------------
-        # Beats (using computed start times)
-        # -------------------------------------------------
-        beats: List[Beat] = [
-            (starts[0] + 0.0, show_title),
-            (starts[0] + 0.5, show_definition),
-            (starts[1] + 0.2, show_contrast),
-            (starts[2] + 0.2, show_maze),
-            (starts[3] + 0.2, show_dfs),
-            (starts[3] + seg_durs[3] - 2.0, wrap_up),  # start wrap‑up ~2 s before audio ends
+        # ----- LEFT (board) actions -----
+        def show_board(state_key: str):
+            nonlocal active_left
+            if active_left is not None:
+                clear_group(self, active_left, run_time=0.5)
+            grp = board_states[state_key]
+            self.play(FadeIn(grp), run_time=0.8)
+            active_left = grp
+
+        def clear_left():
+            nonlocal active_left
+            if active_left is not None:
+                clear_group(self, active_left, run_time=0.5)
+                active_left = None
+
+        # ----- RIGHT (tree) actions -----
+        def show_tree():
+            nonlocal active_right
+            if active_right is not None:
+                clear_group(self, active_right, run_time=0.5)
+            self.play(GrowFromCenter(root), run_time=0.5)
+            self.play(ShowCreation(e1), FadeIn(c1), run_time=0.6)
+            self.play(ShowCreation(e2), FadeIn(c2), run_time=0.6)
+            active_right = tree_group
+
+        def clear_right():
+            nonlocal active_right
+            if active_right is not None:
+                clear_group(self, active_right, run_time=0.5)
+                active_right = None
+
+        # ----- Wrap‑up -----
+        def emphasize_then_wrap():
+            # Callout on the key pattern
+            mantra = Text(
+                "Backtrack → Try → Reject → Re‑try", font_size=34, color=YELLOW
+            ).to_edge(DOWN, buff=0.55)
+            box = callout_box(mantra, color=YELLOW)
+            self.play(Write(mantra), run_time=0.7)
+            self.play(ShowCreation(box), run_time=0.4)
+            self.play(FadeOut(box), run_time=0.3)
+
+            # End card
+            end_card = VGroup(
+                Text("Wrap‑up:", font_size=28, color=GREY_B),
+                Text(
+                    "Backtracking explores all possibilities depth‑first.",
+                    font_size=34,
+                    color=WHITE,
+                ),
+            ).arrange(DOWN, aligned_edge=LEFT, buff=0.2).move_to(ORIGIN).shift(DOWN * 0.2)
+            end_box = SurroundingRectangle(end_card, color=GREY_B, buff=0.35)
+
+            # Clear everything else
+            clear_left()
+            clear_right()
+            self.play(
+                FadeOut(VGroup(left_box, left_label, right_box, right_label)),
+                FadeOut(mantra),
+                run_time=0.8,
+            )
+            self.play(FadeIn(end_box), FadeIn(end_card), run_time=0.9)
+
+        # ----------------------------
+        # Beats (times are approximate, based on narration)
+        # ----------------------------
+        return [
+            (0.0, show_title),                     # "In this video we’ll see..."
+            (1.0, show_layout),                    # "We represent the board..."
+            (2.5, lambda: show_board("empty")),   # show empty board
+            (4.0, lambda: show_board("row1")),    # place first queen
+            (6.0, lambda: show_board("row1_row2")),  # safe second queen
+            (8.0, lambda: show_board("conflict")),   # illustrate conflict
+            (10.0, lambda: show_board("backtrack")), # backtrack step
+            (12.0, show_tree),                     # show decision tree
+            (16.0, emphasize_then_wrap),           # final mantra & wrap‑up
         ]
-
-        return beats

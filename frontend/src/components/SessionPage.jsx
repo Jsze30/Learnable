@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ArrowUp, CaretDoubleLeft, CaretDoubleRight, Microphone } from '@phosphor-icons/react'
 import { Room, RoomEvent, createLocalAudioTrack } from 'livekit-client'
+import ReactMarkdown from 'react-markdown'
+import remarkBreaks from 'remark-breaks'
 
 const PANEL_MIN = 320
 const PANEL_MAX = 560
@@ -23,6 +25,7 @@ function SessionPage({
   autoStartMic = false,
   showVideos = false,
   isGenerating = false,
+  isTyping = false,
 }) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [panelWidth, setPanelWidth] = useState(420)
@@ -292,35 +295,59 @@ function SessionPage({
                 </div>
               )}
             </div>
-            <div className="flex flex-1 px-6 py-4">
-              <div className="flex h-full w-full flex-col items-center rounded-3xl border border-white/10 bg-white/5 p-4">
-                <video
-                  key={currentVideo}
-                  src={`/videos/Video${currentVideo}.mp4`}
-                  controls
-                  autoPlay
-                  className="w-full flex-1 rounded-2xl object-contain"
-                />
-                <div className="mt-2 flex items-center gap-4">
-                  {currentVideo > 1 && (
-                    <button
-                      onClick={() => setCurrentVideo(currentVideo - 1)}
-                      className="flex items-center gap-2 rounded-full bg-white/10 px-6 py-2 text-white font-medium hover:bg-white/20 transition"
-                    >
-                      <ArrowLeft size={20} weight="bold" />
-                      Previous video lesson
-                    </button>
-                  )}
-                  {currentVideo < 2 && (
-                    <button
-                      onClick={() => setCurrentVideo(currentVideo + 1)}
-                      className="flex items-center gap-2 rounded-full bg-white/10 px-6 py-2 text-white font-medium hover:bg-white/20 transition"
-                    >
-                      Next video lesson
-                      <ArrowRight size={20} weight="bold" />
-                    </button>
-                  )}
-                </div>
+            <div className="flex flex-1 px-6 py-4 overflow-hidden">
+              <div className="flex h-full w-full flex-col items-center justify-center rounded-3xl border border-white/10 bg-white/5 p-4 overflow-hidden">
+                {isGenerating && (
+                  <>
+                    <div className="text-sm uppercase tracking-[0.3em] text-white/50">
+                      Generating
+                    </div>
+                    <div className="mt-2 text-2xl font-semibold text-white/80">
+                      Creating your lecture...
+                    </div>
+                  </>
+                )}
+                {!isGenerating && !showVideos && (
+                  <>
+                    <div className="text-sm uppercase tracking-[0.3em] text-white/50">
+                      Video/AI Response
+                    </div>
+                    <div className="mt-2 text-2xl font-semibold text-white/80">
+                      Rendering Output
+                    </div>
+                  </>
+                )}
+                {!isGenerating && showVideos && (
+                  <>
+                    <video
+                      key={currentVideo}
+                      src={`/videos/Video${currentVideo}_example.mp4`}
+                      controls
+                      autoPlay
+                      className="max-w-full max-h-[calc(100%-60px)] rounded-2xl object-contain"
+                    />
+                    <div className="mt-2 flex items-center gap-4">
+                      {currentVideo > 1 && (
+                        <button
+                          onClick={() => setCurrentVideo(currentVideo - 1)}
+                          className="flex items-center gap-2 rounded-full bg-white/10 px-6 py-2 text-white font-medium hover:bg-white/20 transition"
+                        >
+                          <ArrowLeft size={20} weight="bold" />
+                          Previous video lesson
+                        </button>
+                      )}
+                      {currentVideo < 2 && (
+                        <button
+                          onClick={() => setCurrentVideo(currentVideo + 1)}
+                          className="flex items-center gap-2 rounded-full bg-white/10 px-6 py-2 text-white font-medium hover:bg-white/20 transition"
+                        >
+                          Next video lesson
+                          <ArrowRight size={20} weight="bold" />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -368,31 +395,57 @@ function SessionPage({
                     : 'pointer-events-none opacity-0 translate-x-4'
                 }`}
               >
-                <div className="flex flex-1 flex-col items-end justify-end gap-3 overflow-y-auto p-4">
+                <div className="flex-1 overflow-y-auto p-4">
+                  <div className="flex flex-col gap-3">
                     {chatMessages.map((message) => (
                       <div
                         key={message.id}
-                        className={`w-full max-w-[68%] rounded-2xl p-3 text-right text-sm shadow-sm ${
-                          message.role === 'user'
-                            ? 'bg-white/15 text-white'
-                            : 'bg-white text-[#1a1226]'
-                        }`}
+                        className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                       >
-                        {message.role !== 'user' && (
-                          <div className="text-[11px] font-semibold uppercase tracking-widest text-[#1a1226]/60">
-                            Lecturer
-                          </div>
-                        )}
-                        <div className="mt-1 text-base font-medium">
-                          {message.text}
+                        <div
+                          className={`max-w-[90%] rounded-2xl p-3 text-sm shadow-sm ${
+                            message.role === 'user'
+                              ? 'bg-white/15 text-white text-right'
+                              : 'bg-white/10 text-white text-left'
+                          }`}
+                        >
+                          {message.role !== 'user' && (
+                            <div className="text-[11px] font-semibold uppercase tracking-widest text-white/60 mb-2">
+                              Lecturer
+                            </div>
+                          )}
+                          {message.role === 'user' ? (
+                            <div className="text-sm font-normal whitespace-pre-wrap">
+                              {message.text}
+                            </div>
+                          ) : (
+                            <div className="text-sm font-normal prose prose-invert prose-sm max-w-none prose-a:no-underline prose-hr:border-white/20 prose-strong:text-white prose-headings:text-white">
+                              <ReactMarkdown remarkPlugins={[remarkBreaks]}>{message.text}</ReactMarkdown>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
-                    {!chatMessages.length && (
-                      <div className="w-full max-w-[68%] rounded-2xl border border-dashed border-white/20 bg-white/10 p-3 text-right text-xs text-white/60">
+                    {isTyping && (
+                      <div className="flex justify-start">
+                        <div className="bg-white/10 rounded-2xl p-3 text-sm shadow-sm">
+                          <div className="text-[11px] font-semibold uppercase tracking-widest text-white/60 mb-2">
+                            Lecturer
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="w-2 h-2 bg-white/60 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                            <span className="w-2 h-2 bg-white/60 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                            <span className="w-2 h-2 bg-white/60 rounded-full animate-bounce"></span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {!chatMessages.length && !isTyping && (
+                      <div className="w-full rounded-2xl border border-dashed border-white/20 bg-white/10 p-3 text-left text-xs text-white/60">
                         Start the conversation to guide your lecture.
                       </div>
                     )}
+                  </div>
                 </div>
                 <div className="border-t border-white/10 p-4">
                   <div

@@ -43,8 +43,9 @@ function App() {
   const fileInputRef = useRef(null)
   const transitionTimeoutRef = useRef(null)
   const [landingKey, setLandingKey] = useState(0)
-  const [showVideos, setShowVideos] = useState(true)  // TODO: change back to false
+  const [showVideos, setShowVideos] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isTyping, setIsTyping] = useState(false)
 
   useEffect(() => {
     if (!subjects.length) {
@@ -155,15 +156,65 @@ function App() {
     }))
     triggerSessionTransition()
 
-    // Make the API call
+    // Show loading for 10 seconds, then display videos
     setIsGenerating(true)
     setShowVideos(false)
+    setTimeout(() => {
+      setIsGenerating(false)
+      setShowVideos(true)
+    }, 10000)
+
+    // Send assistant response with plan after 3 seconds
+    const planText = `**Back‑tracking Mini‑Series – Text‑only Plan**
+
+---
+
+### Video 1 – Backtracking in a Nutshell
+**Learning goal** – Know what backtracking is and why it works.
+**Core ideas**
+1. The algorithm builds a decision tree; each node represents a partial solution.
+2. It walks the tree depth‑first: try a choice, go deeper, and when the choice fails it "undoes" it and tries the next one.
+3. The call‑stack holds the current choices; pushing a choice = going deeper, popping = back‑track.
+4. Two kinds of leaf nodes: a complete solution (success) or a dead end (failure).
+
+**Key intuition** – Imagine a maze explorer who leaves a rope at every fork. When she hits a wall she pulls the rope back to the last fork and tries the other tunnel. The rope is the recursion stack.
+
+---
+
+### Video 2 – Recursion Tree and Base Cases
+**Learning goal** – See how a backtracking algorithm is represented as a recursion tree and understand the role of base cases.
+**Core ideas**
+1. Each recursive call is a node; the parameters of the call encode the current state (the partial solution).
+2. Children of a node correspond to all legal next decisions.
+3. A leaf node appears when the algorithm reaches a base case: either a full solution or a situation where no further legal move exists.
+4. The whole tree is a depth‑first search of the state space.
+
+**Key intuition** – Think of a stack of plates: adding a plate means making a new decision, removing a plate means back‑tracking. When the stack is empty we have hit a base case.`
+
+    // Show typing indicator after 1 second
+    setTimeout(() => {
+      setIsTyping(true)
+    }, 1000)
+
+    // Send assistant response after 3 seconds (typing for 2 seconds)
+    setTimeout(() => {
+      setIsTyping(false)
+      updateSubjectById(targetSubjectId, (subject) => ({
+        ...subject,
+        chatMessages: [
+          ...subject.chatMessages,
+          { id: `response-${Date.now()}`, role: 'assistant', text: planText },
+        ],
+      }))
+    }, 3000)
+
+    // Make the API call in background
     try {
       console.log({"prompt": prompt})
       const formData = new FormData()
       formData.append('user_prompt', prompt)
       formData.append('model', 'azure/gpt-5')
-      formData.append('max_videos', '1')
+      formData.append('max_videos', '2')
 
       const response = await fetch('http://localhost:3000/generate', {
         method: 'POST',
@@ -176,13 +227,8 @@ function App() {
 
       const data = await response.json()
       console.log('Generate API response:', data)
-
-      // Show the hardcoded videos
-      setShowVideos(true)
     } catch (error) {
       console.error('Failed to call generate API:', error)
-    } finally {
-      setIsGenerating(false)
     }
   }
 
@@ -312,7 +358,7 @@ function App() {
               <div className="relative z-10 flex min-h-screen w-full flex-col px-6 py-8">
                 {/* Header */}
                 <header className="text-2xl font-bold text-white drop-shadow-lg">
-                  LearnIt
+                  Learnable
                 </header>
 
                 {/* Main Content */}
@@ -416,7 +462,7 @@ function App() {
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
                 animateIn={isTransitioning}
-                projectName="LearnIt"
+                projectName="Learnable"
                 sources={activeSubject?.sources || []}
                 onSourcesChange={handleSourcesChange}
                 chatMessages={activeSubject?.chatMessages || []}
@@ -428,6 +474,7 @@ function App() {
                 autoStartMic={autoStartMic}
                 showVideos={showVideos}
                 isGenerating={isGenerating}
+                isTyping={isTyping}
               />
 
 
