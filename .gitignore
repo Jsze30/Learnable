@@ -5,3 +5,5 @@ components copilot.json
 **/venv/
 **/.env
 **/.env.*
+frontend/src/components/plan.txt
+backend/source_example/02-backtracking.pdf

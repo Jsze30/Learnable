@@ -15,18 +15,36 @@ Recommended workflow:
 
 Run:
   manimgl video_template.py TemplateVideo -w
+
+===========================================================
+IMPORTANT RENDERING RULE (DO NOT IGNORE):
+
+❗ Any time you reuse the SAME REGION of the screen,
+   you MUST first explicitly clear the previous visuals.
+
+Manim does NOT auto-clear objects.
+If you draw on top of existing mobjects, they WILL overlap.
+
+✅ Always:
+   - Group related visuals into a VGroup (don't do negative VGroup)
+   - FadeOut / Remove that group
+   - THEN draw the next animation in that space
+
+Treat every region like a whiteboard:
+ERASE → THEN DRAW
+===========================================================
 """
 
 import wave
 import contextlib
 from pathlib import Path
-from typing import Callable, List, Tuple
+from typing import Callable, List, Tuple, Optional
 
 from manimlib import (
-    Scene, VGroup, Text, Dot, Line, Rectangle, Circle,
+    Scene, VGroup, Text, Dot, Line, Rectangle,
     FadeIn, FadeOut, Write, ShowCreation, GrowFromCenter,
-    Transform, ReplacementTransform, Indicate, SurroundingRectangle,
-    YELLOW, GREEN, RED, GREY_B, WHITE, ORIGIN, UP, DOWN, LEFT, RIGHT
+    Indicate, SurroundingRectangle,
+    YELLOW, GREY_B, WHITE, ORIGIN, UP, DOWN, LEFT, RIGHT
 )
 
 # ----------------------------
@@ -35,6 +53,7 @@ from manimlib import (
 def wav_duration_seconds(path: Path) -> float:
     with contextlib.closing(wave.open(str(path), "rb")) as wf:
         return wf.getnframes() / float(wf.getframerate())
+
 
 def safe_wait(scene: Scene, seconds: float, cap: float = 120.0):
     """Never let bad durations cause a forever-wait."""
@@ -51,22 +70,45 @@ def title_card(title: str, subtitle: str = "", *, title_size=48, subtitle_size=2
         return VGroup(t, s)
     return VGroup(t)
 
+
 def section_header(text: str):
     return Text(text, font_size=34, color=WHITE).to_edge(UP, buff=0.65)
 
+
 def callout_box(mob, *, color=YELLOW, buff=0.25):
     return SurroundingRectangle(mob, color=color, buff=buff)
+
 
 def make_node(label: str, color=WHITE):
     dot = Dot(radius=0.06, color=color)
     txt = Text(label, font_size=22, color=color).next_to(dot, RIGHT, buff=0.12)
     return VGroup(dot, txt)
 
+
 def connect_nodes(a: VGroup, b: VGroup, color=GREY_B, stroke_width=3):
     return Line(a[0].get_center(), b[0].get_center(), color=color, stroke_width=stroke_width)
 
+
 def simple_box_label(box: Rectangle, label: str):
     return Text(label, font_size=26, color=GREY_B).next_to(box, UP, buff=0.2)
+
+
+# ----------------------------
+# Clearing helpers (CRITICAL)
+# ----------------------------
+def clear_group(scene: Scene, group: VGroup, *, run_time: float = 0.6):
+    """
+    Explicitly clears a visual region.
+
+    ALWAYS call this before drawing new visuals
+    in the same screen location.
+    """
+    if group is None:
+        return
+    if len(group) == 0:
+        return
+    scene.play(FadeOut(group), run_time=run_time)
+    scene.remove(group)
 
 
 # ----------------------------
@@ -79,6 +121,7 @@ Each beat is (time_in_seconds_from_start, function_to_run).
 You define beats in build_timeline().
 The engine plays them in order, waiting between timestamps.
 """
+
 
 # Note: don't change this class name!!
 class NarratedTimelineScene(Scene):
@@ -100,9 +143,7 @@ class NarratedTimelineScene(Scene):
     def construct(self):
         narration = self.get_narration_path()
         if not narration.exists():
-            raise RuntimeError(
-                f"Missing {narration}. Run your gen_audio.py first."
-            )
+            raise RuntimeError(f"Missing {narration}. Run your gen_audio.py first.")
 
         dur = wav_duration_seconds(narration)
         self.add_sound(str(narration), time_offset=0)
@@ -138,6 +179,7 @@ class TemplateVideo(NarratedTimelineScene):
         # Pre-build reusable objects (so actions can reference them)
         header = title_card(VIDEO_TITLE, VIDEO_SUBTITLE).to_edge(UP, buff=0.6)
 
+        # Regions (boxes) — these persist until you clear them
         left_box = Rectangle(width=5.4, height=3.4, stroke_width=3, stroke_color=GREY_B)
         left_box.to_edge(LEFT, buff=0.7).shift(DOWN * 0.6)
         left_label = simple_box_label(left_box, "Left visual (example)")
@@ -148,19 +190,28 @@ class TemplateVideo(NarratedTimelineScene):
 
         # Example mini-diagram in left box (replace with your own)
         c = left_box.get_center()
-        a = Dot(c + LEFT*1.4 + UP*0.8, color=WHITE)
-        b = Dot(c + RIGHT*1.4 + DOWN*0.4, color=WHITE)
+        a = Dot(c + LEFT * 1.4 + UP * 0.8, color=WHITE)
+        b = Dot(c + RIGHT * 1.4 + DOWN * 0.4, color=WHITE)
         arrow = Line(a.get_center(), b.get_center(), color=GREY_B, stroke_width=4)
+
+        # GROUP EVERYTHING YOU DRAW IN THAT REGION
+        left_diagram = VGroup(a, b, arrow)
 
         # Example mini-tree in right box
         tc = right_box.get_center()
-        root = make_node("root").move_to(tc + UP*1.0)
-        n1 = make_node("choice 1").move_to(tc + LEFT*1.3 + DOWN*0.1)
-        n2 = make_node("choice 2").move_to(tc + RIGHT*1.3 + DOWN*0.1)
+        root = make_node("root").move_to(tc + UP * 1.0)
+        n1 = make_node("choice 1").move_to(tc + LEFT * 1.3 + DOWN * 0.1)
+        n2 = make_node("choice 2").move_to(tc + RIGHT * 1.3 + DOWN * 0.1)
         e1 = connect_nodes(root, n1)
         e2 = connect_nodes(root, n2)
 
+        right_diagram = VGroup(root, n1, n2, e1, e2)
+
         mantra = Text("Key pattern / mantra", font_size=34, color=YELLOW).to_edge(DOWN, buff=0.55)
+
+        # Track what is currently "active" in each region
+        active_left: Optional[VGroup] = None
+        active_right: Optional[VGroup] = None
 
         # Helper actions (so beats stay clean)
         def show_title():
@@ -174,13 +225,40 @@ class TemplateVideo(NarratedTimelineScene):
             )
 
         def show_left_diagram():
-            self.play(FadeIn(a), FadeIn(b), ShowCreation(arrow), run_time=0.9)
+            nonlocal active_left
+            # CLEAR BEFORE DRAWING IN SAME REGION
+            if active_left is not None:
+                clear_group(self, active_left, run_time=0.5)
+
+            self.play(FadeIn(left_diagram), run_time=0.9)
             self.play(Indicate(arrow, color=YELLOW), run_time=0.5)
 
+            active_left = left_diagram
+
+        def clear_left_diagram():
+            nonlocal active_left
+            if active_left is not None:
+                clear_group(self, active_left, run_time=0.6)
+                active_left = None
+
         def show_right_diagram():
+            nonlocal active_right
+            # CLEAR BEFORE DRAWING IN SAME REGION
+            if active_right is not None:
+                clear_group(self, active_right, run_time=0.5)
+
+            # Animate in a tree-like sequence
             self.play(GrowFromCenter(root), run_time=0.5)
             self.play(ShowCreation(e1), FadeIn(n1), run_time=0.6)
             self.play(ShowCreation(e2), FadeIn(n2), run_time=0.6)
+
+            active_right = right_diagram
+
+        def clear_right_diagram():
+            nonlocal active_right
+            if active_right is not None:
+                clear_group(self, active_right, run_time=0.6)
+                active_right = None
 
         def show_mantra():
             self.play(Write(mantra), run_time=0.6)
@@ -193,11 +271,15 @@ class TemplateVideo(NarratedTimelineScene):
             end_card = VGroup(
                 Text("Wrap-up:", font_size=28, color=GREY_B),
                 Text("One sentence takeaway.", font_size=34, color=WHITE),
-            ).arrange(DOWN, aligned_edge=LEFT, buff=0.2).move_to(ORIGIN).shift(DOWN*0.2)
+            ).arrange(DOWN, aligned_edge=LEFT, buff=0.2).move_to(ORIGIN).shift(DOWN * 0.2)
             end_box = SurroundingRectangle(end_card, color=GREY_B, buff=0.35)
 
+            # CRITICAL: clear diagrams before switching layouts
+            clear_left_diagram()
+            clear_right_diagram()
+
             self.play(
-                FadeOut(VGroup(left_box, right_box, left_label, right_label, a, b, arrow, root, n1, n2, e1, e2)),
+                FadeOut(VGroup(left_box, left_label, right_box, right_label)),
                 FadeOut(mantra),
                 run_time=0.8
             )
@@ -206,12 +288,20 @@ class TemplateVideo(NarratedTimelineScene):
         # ----------------------------
         # Beats (edit these times)
         # ----------------------------
-        # These timestamps are from narration start (t=0).
-        # You can refine by printing durations from gen_audio.py and adjusting.
+        # TIMELINE RULE:
+        # If two beats draw in the same area,
+        # the earlier visuals MUST be cleared first.
+        #
+        # Never rely on overlap or replacement by accident.
+        # Always FadeOut / Remove explicitly.
         return [
             (0.0, show_title),
             (0.9, show_layout),
             (2.0, show_left_diagram),
+
+            # Example explicit clear BEFORE reusing the left region
+            (4.8, clear_left_diagram),
+
             (5.0, show_right_diagram),
             (8.0, show_mantra),
             (12.0, emphasize_then_wrap),
